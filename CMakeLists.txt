@@ -16,7 +16,7 @@ if (NOT CMAKE_BUILD_TYPE)
 endif()
 
 # C++ standard
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
@@ -25,38 +25,22 @@ if (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
     add_compile_options(-march=armv8-a+simd)
 endif()
 
-# ----------------- GoogleTest -----------------
-#
-# Prefer a system-installed GTest. If not found, you can:
-#   - add_subdirectory of a vendored GTest,
-#   - or use FetchContent.
-#
-# Here we first try system GTest. If not found, we optionally download it.
+# ----------------- GoogleTest (required, no auto-fetch) -----------------
 
-include(CMakeFindDependencyMacro)
+find_package(GTest REQUIRED)
 
-find_package(GTest QUIET)
+message(STATUS "Found GoogleTest: ${GTest_DIR}")
+# Common configurations use imported targets GTest::gtest and GTest::gtest_main.
+# Some distros expose GTest::GTest / GTest::Main instead. Handle both.
 
-if (NOT GTest_FOUND)
-    message(STATUS "GTest not found via find_package; trying FetchContent...")
-
-    include(FetchContent)
-    FetchContent_Declare(
-        googletest
-        URL https://github.com/google/googletest/archive/refs/tags/v1.14.0.zip
-    )
-
-    # For MSVC: avoid overriding runtime library settings
-    set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
-
-    FetchContent_MakeAvailable(googletest)
-
-    # After this, GTest::gtest and GTest::gtest_main targets are available
-    set(GTEST_BOTH_LIBRARIES GTest::gtest GTest::gtest_main)
-    set(GTEST_INCLUDE_DIRS "")
+if (TARGET GTest::gtest AND TARGET GTest::gtest_main)
+    set(GTEST_LIBRARIES GTest::gtest GTest::gtest_main)
+elseif (TARGET GTest::GTest AND TARGET GTest::Main)
+    set(GTEST_LIBRARIES GTest::GTest GTest::Main)
 else()
-    message(STATUS "Found system GTest")
-    set(GTEST_BOTH_LIBRARIES GTest::GTest GTest::Main)
+    message(FATAL_ERROR
+        "GTest was found but expected targets are missing. "
+        "Available targets: ${GLOBAL_PROPERTY:TARGETS}")
 endif()
 
 # ----------------- OpenMP -----------------
@@ -76,17 +60,12 @@ endif()
 
 # ----------------- Test executable -----------------
 
-# Add your test source file here
 add_executable(simdc
     main.cpp
 )
 
-target_include_directories(simdc PRIVATE
-    ${GTEST_INCLUDE_DIRS}
-)
-
 target_link_libraries(simdc PRIVATE
-    ${GTEST_BOTH_LIBRARIES}
+    ${GTEST_LIBRARIES}
     pthread
 )
 
@@ -94,10 +73,6 @@ if (HAVE_OPENMP)
     target_compile_definitions(simdc PRIVATE HAVE_OPENMP=1)
     target_link_libraries(simdc PRIVATE OpenMP::OpenMP_CXX)
 endif()
-
-# Some compilers need explicit NEON header path; usually not necessary.
-# You can add include dirs here if needed:
-# target_include_directories(simdc PRIVATE /path/to/arm/neon/includes)
 
 # ----------------- CTest integration -----------------
 
