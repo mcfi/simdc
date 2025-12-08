@@ -25,10 +25,13 @@
 // ----------------- Scalar reference implementations -----------------
 
 // Deterministic model for FCVTZS (f32 -> s32).
-static int32_t ref_fcvtzs_f32_to_s32(float x) {
-    if (!std::isfinite(x)) {
+static int32_t ref_vcvtq_s32_f32(float x) {
+    if (std::isinf(x)) {
         return (std::signbit(x)) ? std::numeric_limits<int32_t>::min()
                                  : std::numeric_limits<int32_t>::max();
+	return 0;
+    } else if (std::isnan(x)) {
+	return 0;
     }
 
     float t = std::trunc(x);  // round toward zero
@@ -42,9 +45,11 @@ static int32_t ref_fcvtzs_f32_to_s32(float x) {
 }
 
 // Deterministic model for FCVTZU (f32 -> u32).
-static uint32_t ref_fcvtzu_f32_to_u32(float x) {
-    if (!std::isfinite(x)) {
+static uint32_t ref_vcvtq_u32_f32(float x) {
+    if (std::isinf(x)) {
         return (std::signbit(x)) ? 0u : std::numeric_limits<uint32_t>::max();
+    } else if (std::isnan(x)) {
+	return 0;
     }
 
     if (x <= 0.0f)
@@ -61,10 +66,12 @@ static uint32_t ref_fcvtzu_f32_to_u32(float x) {
 // ----------------- Tests -----------------
 
 // Full-range test for vcvtq_s32_f32.
-TEST(NeonVcvtq_FullRange, Signed_s32_from_f32) {
+TEST(neon, vcvtq_s32_f32) {
     // Use atomics to record mismatches (to keep the test thread-safe).
     std::atomic<uint64_t> mismatch_count{0};
     std::atomic<uint32_t> first_mismatch_pattern{0};
+    std::atomic<uint32_t> expected_result{0};
+    std::atomic<uint32_t> actual_result{0};
     std::atomic<bool>     have_first_mismatch{false};
 
     // Iterate over all 2^32 bit patterns.
@@ -80,7 +87,7 @@ TEST(NeonVcvtq_FullRange, Signed_s32_from_f32) {
 
         int32x4_t vout = vcvtq_s32_f32(vin);
         int32_t neon_result = vgetq_lane_s32(vout, 0);
-        int32_t ref_result  = ref_fcvtzs_f32_to_s32(x);
+        int32_t ref_result  = ref_vcvtq_s32_f32(x);
 
         if (neon_result != ref_result) {
             mismatch_count.fetch_add(1, std::memory_order_relaxed);
@@ -88,6 +95,8 @@ TEST(NeonVcvtq_FullRange, Signed_s32_from_f32) {
             if (have_first_mismatch.compare_exchange_strong(expected_false, true,
                                                             std::memory_order_relaxed)) {
                 first_mismatch_pattern.store(bits, std::memory_order_relaxed);
+		expected_result.store(static_cast<uint32_t>(ref_result), std::memory_order_relaxed);
+		actual_result.store(static_cast<uint32_t>(neon_result), std::memory_order_relaxed);
             }
         }
     }
@@ -100,12 +109,14 @@ TEST(NeonVcvtq_FullRange, Signed_s32_from_f32) {
                << " mismatches for vcvtq_s32_f32.\n"
                << "First mismatch at bit pattern 0x"
                << std::hex << pattern << std::dec
-               << " (float value " << x << ")";
+               << " (float value " << x << ")\n"
+	       << "Expected result: " << std::hex << expected_result.load(std::memory_order_relaxed) << "\n"
+	       << "Actual result: " << std::hex << actual_result.load(std::memory_order_relaxed) << "\n";
     }
 }
 
 // Full-range test for vcvtq_u32_f32.
-TEST(NeonVcvtq_FullRange, Unsigned_u32_from_f32) {
+TEST(neon, vcvtq_u32_f32) {
     std::atomic<uint64_t> mismatch_count{0};
     std::atomic<uint32_t> first_mismatch_pattern{0};
     std::atomic<bool>     have_first_mismatch{false};
@@ -120,7 +131,7 @@ TEST(NeonVcvtq_FullRange, Unsigned_u32_from_f32) {
 
         uint32x4_t vout = vcvtq_u32_f32(vin);
         uint32_t neon_result = vgetq_lane_u32(vout, 0);
-        uint32_t ref_result  = ref_fcvtzu_f32_to_u32(x);
+        uint32_t ref_result  = ref_vcvtq_u32_f32(x);
 
         if (neon_result != ref_result) {
             mismatch_count.fetch_add(1, std::memory_order_relaxed);
