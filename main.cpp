@@ -58,16 +58,6 @@ static uint32_t ref_fcvtzu_f32_to_u32(float x) {
     return static_cast<uint32_t>(t);
 }
 
-// ----------------- Helpers -----------------
-
-// Bit-cast uint32_t to float in a portable way.
-static inline float u32_to_f32(uint32_t bits) {
-    float f;
-    static_assert(sizeof(f) == sizeof(bits), "size mismatch");
-    std::memcpy(&f, &bits, sizeof(f));
-    return f;
-}
-
 // ----------------- Tests -----------------
 
 // Full-range test for vcvtq_s32_f32.
@@ -82,7 +72,7 @@ TEST(NeonVcvtq_FullRange, Signed_s32_from_f32) {
 #pragma omp parallel for schedule(static)
     for (int64_t i = 0; i < (1LL << 32); ++i) {
         uint32_t bits = static_cast<uint32_t>(i);
-        float x = u32_to_f32(bits);
+        float x = std::bit_cast<float>(bits);
 
         // Build a vector with x in lane 0.
         float32x4_t vin = vdupq_n_f32(0.0f);
@@ -105,7 +95,7 @@ TEST(NeonVcvtq_FullRange, Signed_s32_from_f32) {
     uint64_t mismatches = mismatch_count.load(std::memory_order_relaxed);
     if (mismatches != 0) {
         uint32_t pattern = first_mismatch_pattern.load(std::memory_order_relaxed);
-        float x = u32_to_f32(pattern);
+        float x = std::bit_cast<float>(pattern);
         FAIL() << "Found " << mismatches
                << " mismatches for vcvtq_s32_f32.\n"
                << "First mismatch at bit pattern 0x"
@@ -123,7 +113,7 @@ TEST(NeonVcvtq_FullRange, Unsigned_u32_from_f32) {
 #pragma omp parallel for schedule(static)
     for (int64_t i = 0; i < (1LL << 32); ++i) {
         uint32_t bits = static_cast<uint32_t>(i);
-        float x = u32_to_f32(bits);
+        float x = std::bit_cast<float>(bits);
 
         float32x4_t vin = vdupq_n_f32(0.0f);
         vin = vsetq_lane_f32(x, vin, 0);
@@ -145,7 +135,7 @@ TEST(NeonVcvtq_FullRange, Unsigned_u32_from_f32) {
     uint64_t mismatches = mismatch_count.load(std::memory_order_relaxed);
     if (mismatches != 0) {
         uint32_t pattern = first_mismatch_pattern.load(std::memory_order_relaxed);
-        float x = u32_to_f32(pattern);
+        float x = std::bit_cast<float>(pattern);
         FAIL() << "Found " << mismatches
                << " mismatches for vcvtq_u32_f32.\n"
                << "First mismatch at bit pattern 0x"
