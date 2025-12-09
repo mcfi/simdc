@@ -4,11 +4,6 @@ project(NeonVcvtqTests LANGUAGES CXX)
 # User options
 option(ENABLE_OPENMP "Enable OpenMP for full-range tests" ON)
 
-# Require aarch64 with NEON; you can relax this if you want cross-compiles.
-if (NOT CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|ARM64|arm64")
-    message(FATAL_ERROR "This project is intended for AArch64/ARM64 with NEON.")
-endif()
-
 # Set default build type
 if (NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release CACHE STRING
