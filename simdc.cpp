@@ -140,11 +140,11 @@ TEST(neon, vcvtq_u32_f32) {
 }
 
 #ifdef __ARM_FEATURE_SVE
-TEST(neon, vcvtq_s32_f32) {
+TEST(sve, vcvtq_s32_f32) {
   RunFullRangeTest<FloatToIntTraits<float, int32_t>>(
       FloatToIntTraits<float, int32_t>::sve);
 }
-TEST(neon, vcvtq_u32_f32) {
+TEST(sve, vcvtq_u32_f32) {
   RunFullRangeTest<FloatToIntTraits<float, uint32_t>>(
       FloatToIntTraits<float, uint32_t>::sve);
 }
