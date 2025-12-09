@@ -13,6 +13,7 @@
 
 // ----------------- Template traits for signed/unsigned cases -----------------
 template <typename FloatT, typename IntT> struct FloatToIntTraits;
+
 template <> struct FloatToIntTraits<float, int32_t> {
   using FloatType = float;
   using IntType = int32_t;
@@ -52,9 +53,39 @@ template <> struct FloatToIntTraits<float, int32_t> {
     return svlastb_s32(pg, vout);
   }
 #endif
-#endif
 
   static const char *name() { return "fcvtzs"; }
+
+#elif defined(__x86_64__)
+
+  static IntType ref(float x) {
+    if (std::isinf(x)) {
+      return (std::signbit(x)) ? std::numeric_limits<IntType>::min()
+                               : std::numeric_limits<IntType>::max();
+    } else if (std::isnan(x)) {
+      return 0;
+    }
+
+    float t = std::trunc(x); // toward zero
+    if (t > static_cast<float>(std::numeric_limits<IntType>::max())) {
+      return std::numeric_limits<IntType>::max();
+    }
+    if (t < static_cast<float>(std::numeric_limits<IntType>::min())) {
+      return std::numeric_limits<IntType>::min();
+    }
+    return static_cast<IntType>(t);
+  }
+
+  static IntType avx512(FloatType x) {
+    __m512 v = _mm512_set1_ps(x);
+    __m512i vi = _mm512_cvt_roundps_epi32(v, _MM_FROUND_TO_NEAREST_INT |
+                                                 _MM_FROUND_NO_EXC);
+    return _mm_cvtsi128_si32(_mm512_castsi512_si128(vi));
+  }
+
+  static const char *name() { return "vcvtps2dq"; }
+
+#endif
 };
 
 // Specialization for unsigned 32-bit int (models FCVTZU: f32 -> u32).
@@ -97,9 +128,41 @@ template <> struct FloatToIntTraits<float, uint32_t> {
     return svlastb_u32(pg, vout);
   }
 #endif
-#endif
 
   static const char *name() { return "fcvtzu"; }
+
+#elif defined(__x86_64__)
+
+  static IntType ref(float x) {
+    // Deterministic model for FCVTZU: round toward zero + clamp, with
+    // negative / -inf inputs mapped to 0.
+    if (std::isinf(x)) {
+      return (std::signbit(x)) ? 0u : std::numeric_limits<IntType>::max();
+    } else if (std::isnan(x)) {
+      return 0;
+    }
+    if (x <= 0.0f) {
+      return 0u;
+    }
+    float t = std::trunc(x); // toward zero
+    if (t > static_cast<float>(std::numeric_limits<IntType>::max())) {
+      return std::numeric_limits<IntType>::max();
+    }
+    return static_cast<IntType>(t);
+  }
+
+#ifdef __AVX512F__
+  static IntType avx512(FloatType x) {
+    __m512 v = _mm512_set1_ps(x);
+    __m512i vi = _mm512_cvt_roundps_epu32(v, _MM_FROUND_TO_NEAREST_INT |
+                                                 _MM_FROUND_NO_EXC);
+    return _mm_cvtsi128_si32(_mm512_castsi512_si128(vi));
+  }
+#endif
+
+  static const char *name() { return "vcvtps2udq"; }
+
+#endif
 };
 
 // ----------------- Shared full-range test template -----------------
@@ -137,6 +200,7 @@ template <typename Traits, typename Convert> void RunFullRangeTest(Convert Cv) {
 }
 
 // ----------------- Tests -----------------
+#ifdef __aarch64__
 TEST(neon, vcvtq_s32_f32) {
   RunFullRangeTest<FloatToIntTraits<float, int32_t>>(
       FloatToIntTraits<float, int32_t>::neon);
@@ -147,14 +211,29 @@ TEST(neon, vcvtq_u32_f32) {
 }
 
 #ifdef __ARM_FEATURE_SVE
-TEST(sve, vcvtq_s32_f32) {
+TEST(sve, svcvt_s32_f32_x) {
   RunFullRangeTest<FloatToIntTraits<float, int32_t>>(
       FloatToIntTraits<float, int32_t>::sve);
 }
-TEST(sve, vcvtq_u32_f32) {
+TEST(sve, svcvt_u32_f32_x) {
   RunFullRangeTest<FloatToIntTraits<float, uint32_t>>(
       FloatToIntTraits<float, uint32_t>::sve);
 }
+#endif
+
+#elif defined(__x86_64__)
+
+#ifdef __AVX512F__
+TEST(avx512, _mm512_cvt_roundps_epi32) {
+  RunFullRangeTest<FloatToIntTraits<float, int32_t>>(
+      FloatToIntTraits<float, int32_t>::avx512);
+}
+TEST(avx512, _mm512_cvt_roundps_epu32) {
+  RunFullRangeTest<FloatToIntTraits<float, uint32_t>>(
+      FloatToIntTraits<float, uint32_t>::avx512);
+}
+#endif
+
 #endif
 
 // main can be omitted if you link with gtest_main.
