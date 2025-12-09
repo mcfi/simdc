@@ -128,6 +128,7 @@ template <typename Traits, typename Convert> void RunFullRangeTest(Convert Cv) {
            << std::dec << " (float value " << x << ")";
   }
 }
+
 // ----------------- Tests -----------------
 TEST(neon, vcvtq_s32_f32) {
   RunFullRangeTest<FloatToIntTraits<float, int32_t>>(

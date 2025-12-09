@@ -22,7 +22,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 # Enable -march for NEON where applicable (GCC/Clang)
 if (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
-    add_compile_options(-march=armv8-a+simd)
+    add_compile_options(-march=native)
 endif()
 
 # ----------------- GoogleTest (required, no auto-fetch) -----------------
