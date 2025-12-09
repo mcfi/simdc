@@ -1,6 +1,8 @@
 #ifdef __aarch64__
 #include <arm_neon.h>
 #include <arm_sve.h>
+#elif defined(__x86_64__)
+#include <immintrin.h>
 #endif
 #include <gtest/gtest.h>
 #include <omp.h>
