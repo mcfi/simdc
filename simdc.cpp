@@ -13,18 +13,17 @@
 
 // ----------------- Template traits for signed/unsigned cases -----------------
 template <typename FloatT, typename IntT> struct FloatToIntTraits;
-// Specialization for signed 32-bit int (models FCVTZS: f32 -> s32).
 template <> struct FloatToIntTraits<float, int32_t> {
   using FloatType = float;
   using IntType = int32_t;
   static const int bit_width = 32;
   static_assert(sizeof(FloatType) == sizeof(IntType));
+
+#ifdef __aarch64__
   static IntType ref(float x) {
-    // Deterministic model for FCVTZS: round toward zero + clamp.
     if (std::isinf(x)) {
       return (std::signbit(x)) ? std::numeric_limits<IntType>::min()
                                : std::numeric_limits<IntType>::max();
-      return 0;
     } else if (std::isnan(x)) {
       return 0;
     }
@@ -38,6 +37,7 @@ template <> struct FloatToIntTraits<float, int32_t> {
     }
     return static_cast<IntType>(t);
   }
+
   static IntType neon(FloatType x) {
     float32x4_t vin = vdupq_n_f32(x);
     int32x4_t vout = vcvtq_s32_f32(vin);
@@ -52,6 +52,8 @@ template <> struct FloatToIntTraits<float, int32_t> {
     return svlastb_s32(pg, vout);
   }
 #endif
+#endif
+
   static const char *name() { return "fcvtzs"; }
 };
 
@@ -61,6 +63,8 @@ template <> struct FloatToIntTraits<float, uint32_t> {
   using IntType = uint32_t;
   static const int bit_width = 32;
   static_assert(sizeof(FloatType) == sizeof(IntType));
+
+#ifdef __aarch64__
   static IntType ref(float x) {
     // Deterministic model for FCVTZU: round toward zero + clamp, with
     // negative / -inf inputs mapped to 0.
@@ -78,6 +82,7 @@ template <> struct FloatToIntTraits<float, uint32_t> {
     }
     return static_cast<IntType>(t);
   }
+
   static IntType neon(FloatType x) {
     float32x4_t vin = vdupq_n_f32(x);
     uint32x4_t vout = vcvtq_u32_f32(vin);
@@ -92,6 +97,8 @@ template <> struct FloatToIntTraits<float, uint32_t> {
     return svlastb_u32(pg, vout);
   }
 #endif
+#endif
+
   static const char *name() { return "fcvtzu"; }
 };
 
