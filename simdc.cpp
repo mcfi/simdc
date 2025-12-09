@@ -11,20 +11,14 @@
 #include <cstring>
 #include <limits>
 
-// ----------------- Generic helper: bit-cast u32 -> float -----------------
-static inline float u32_to_f32(uint32_t bits) {
-  float f;
-  static_assert(sizeof(f) == sizeof(bits), "size mismatch");
-  std::memcpy(&f, &bits, sizeof(f));
-  return f;
-}
 // ----------------- Template traits for signed/unsigned cases -----------------
-template <typename IntT, typename FloatT> struct FloatToIntTraits;
+template <typename FloatT, typename IntT> struct FloatToIntTraits;
 // Specialization for signed 32-bit int (models FCVTZS: f32 -> s32).
-template <> struct FloatToIntTraits<int32_t, float> {
-  using IntType = int32_t;
+template <> struct FloatToIntTraits<float, int32_t> {
   using FloatType = float;
+  using IntType = int32_t;
   static const int bit_width = 32;
+  static_assert(sizeof(FloatType) == sizeof(IntType));
   static IntType ref(float x) {
     // Deterministic model for FCVTZS: round toward zero + clamp.
     if (std::isinf(x)) {
@@ -58,14 +52,15 @@ template <> struct FloatToIntTraits<int32_t, float> {
     return svlastb_s32(pg, vout);
   }
 #endif
-  static const char *name() { return "vcvtq_s32_f32"; }
+  static const char *name() { return "fcvtzs"; }
 };
 
 // Specialization for unsigned 32-bit int (models FCVTZU: f32 -> u32).
-template <> struct FloatToIntTraits<uint32_t, float> {
-  using IntType = uint32_t;
+template <> struct FloatToIntTraits<float, uint32_t> {
   using FloatType = float;
+  using IntType = uint32_t;
   static const int bit_width = 32;
+  static_assert(sizeof(FloatType) == sizeof(IntType));
   static IntType ref(float x) {
     // Deterministic model for FCVTZU: round toward zero + clamp, with
     // negative / -inf inputs mapped to 0.
@@ -97,8 +92,7 @@ template <> struct FloatToIntTraits<uint32_t, float> {
     return svlastb_u32(pg, vout);
   }
 #endif
-
-  static const char *name() { return "vcvtq_u32_f32"; }
+  static const char *name() { return "fcvtzu"; }
 };
 
 // ----------------- Shared full-range test template -----------------
@@ -136,22 +130,22 @@ template <typename Traits, typename Convert> void RunFullRangeTest(Convert Cv) {
 }
 // ----------------- Tests -----------------
 TEST(neon, vcvtq_s32_f32) {
-  RunFullRangeTest<FloatToIntTraits<int32_t, float>>(
-      FloatToIntTraits<int32_t, float>::neon);
+  RunFullRangeTest<FloatToIntTraits<float, int32_t>>(
+      FloatToIntTraits<float, int32_t>::neon);
 }
 TEST(neon, vcvtq_u32_f32) {
-  RunFullRangeTest<FloatToIntTraits<uint32_t, float>>(
-      FloatToIntTraits<uint32_t, float>::neon);
+  RunFullRangeTest<FloatToIntTraits<float, uint32_t>>(
+      FloatToIntTraits<float, uint32_t>::neon);
 }
 
 #ifdef __ARM_FEATURE_SVE
 TEST(neon, vcvtq_s32_f32) {
-  RunFullRangeTest<FloatToIntTraits<int32_t, float>>(
-      FloatToIntTraits<int32_t, float>::sve);
+  RunFullRangeTest<FloatToIntTraits<float, int32_t>>(
+      FloatToIntTraits<float, int32_t>::sve);
 }
 TEST(neon, vcvtq_u32_f32) {
-  RunFullRangeTest<FloatToIntTraits<uint32_t, float>>(
-      FloatToIntTraits<uint32_t, float>::sve);
+  RunFullRangeTest<FloatToIntTraits<float, uint32_t>>(
+      FloatToIntTraits<float, uint32_t>::sve);
 }
 #endif
 
