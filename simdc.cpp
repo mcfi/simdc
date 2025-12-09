@@ -61,16 +61,13 @@ template <> struct FloatToIntTraits<float, int32_t> {
 #elif defined(__x86_64__)
 
   static IntType ref(float x) {
-    if (std::isinf(x)) {
-      return (std::signbit(x)) ? std::numeric_limits<IntType>::min()
-                               : std::numeric_limits<IntType>::max();
-    } else if (std::isnan(x)) {
-      return 0;
+    if (!std::isfinite(x)) {
+      return std::numeric_limits<IntType>::min();
     }
 
     float t = std::trunc(x); // toward zero
     if (t > static_cast<float>(std::numeric_limits<IntType>::max())) {
-      return std::numeric_limits<IntType>::max();
+      return std::numeric_limits<IntType>::min();
     }
     if (t < static_cast<float>(std::numeric_limits<IntType>::min())) {
       return std::numeric_limits<IntType>::min();
@@ -106,12 +103,12 @@ template <> struct FloatToIntTraits<float, uint32_t> {
     } else if (std::isnan(x)) {
       return 0;
     }
-    if (x <= 0.0f) {
-      return 0u;
-    }
     float t = std::trunc(x); // toward zero
     if (t > static_cast<float>(std::numeric_limits<IntType>::max())) {
       return std::numeric_limits<IntType>::max();
+    }
+    if (t < -0.0f) {
+      return 0u;
     }
     return static_cast<IntType>(t);
   }
@@ -135,19 +132,16 @@ template <> struct FloatToIntTraits<float, uint32_t> {
 
 #elif defined(__x86_64__)
 
-  static IntType ref(float x) {
-    // Deterministic model for FCVTZU: round toward zero + clamp, with
-    // negative / -inf inputs mapped to 0.
-    if (std::isinf(x)) {
-      return (std::signbit(x)) ? 0u : std::numeric_limits<IntType>::max();
-    } else if (std::isnan(x)) {
-      return 0;
+  static IntType ref(FloatType x) {
+    if (std::isinf(x) || std::isnan(x)) {
+      return std::numeric_limits<IntType>::max();
     }
-    if (x <= 0.0f) {
-      return 0u;
+
+    FloatType t = std::trunc(x); // toward zero
+    if (t > static_cast<FloatType>(std::numeric_limits<IntType>::max())) {
+      return std::numeric_limits<IntType>::max();
     }
-    float t = std::trunc(x); // toward zero
-    if (t > static_cast<float>(std::numeric_limits<IntType>::max())) {
+    if (t < -0.0f) {
       return std::numeric_limits<IntType>::max();
     }
     return static_cast<IntType>(t);
@@ -172,7 +166,6 @@ template <typename Traits, typename Convert> void RunFullRangeTest(Convert Cv) {
   using IntType = typename Traits::IntType;
   using FloatType = typename Traits::FloatType;
   static_assert(Traits::bit_width <= 32);
-  std::atomic<uint64_t> mismatch_count{0};
   std::atomic<IntType> first_mismatch_pattern{0};
   std::atomic<bool> have_first_mismatch{false};
 #pragma omp parallel for schedule(static)
@@ -182,20 +175,19 @@ template <typename Traits, typename Convert> void RunFullRangeTest(Convert Cv) {
     IntType neon_result = Cv(x);
     IntType ref_result = Traits::ref(x);
     if (neon_result != ref_result) {
-      mismatch_count.fetch_add(1, std::memory_order_relaxed);
       bool expected_false = false;
-      if (have_first_mismatch.compare_exchange_strong(
-              expected_false, true, std::memory_order_relaxed)) {
-        first_mismatch_pattern.store(bits, std::memory_order_relaxed);
+      if (!have_first_mismatch.load(std::memory_order_relaxed)) {
+        if (have_first_mismatch.compare_exchange_strong(
+                expected_false, true, std::memory_order_relaxed)) {
+          first_mismatch_pattern.store(bits, std::memory_order_relaxed);
+        }
       }
     }
   }
-  uint64_t mismatches = mismatch_count.load(std::memory_order_relaxed);
-  if (mismatches != 0) {
+  if (have_first_mismatch.load(std::memory_order_relaxed)) {
     IntType pattern = first_mismatch_pattern.load(std::memory_order_relaxed);
     FloatType x = std::bit_cast<FloatType>(pattern);
-    FAIL() << "Found " << mismatches << " mismatches for " << Traits::name()
-           << ".\n"
+    FAIL() << "Found mismatches for " << Traits::name() << ".\n"
            << "First mismatch at bit pattern 0x" << std::hex << pattern
            << std::dec << " (float value " << x << ")";
   }
