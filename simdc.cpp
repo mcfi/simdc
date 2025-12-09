@@ -55,8 +55,7 @@ template <> struct FloatToIntTraits<int32_t, float> {
     svfloat32_t vin = svdup_f32(x);
     svbool_t pg = svptrue_b32();
     svint32_t vout = svcvt_s32_f32_x(pg, vin);
-    return svlastb_s32(
-        pg, vout); // last active, but with all-lanes-true this is fine
+    return svlastb_s32(pg, vout);
   }
 #endif
   static const char *name() { return "vcvtq_s32_f32"; }
