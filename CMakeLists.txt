@@ -61,7 +61,7 @@ endif()
 # ----------------- Test executable -----------------
 
 add_executable(simdc
-    main.cpp
+    simdc.cpp
 )
 
 target_link_libraries(simdc PRIVATE
