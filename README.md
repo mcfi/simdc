@@ -1,2 +1,6 @@
 # simdc
-Representing simd instruction behaviors using C/C++
+Showing simd instruction behaviors in C/C++ scalar loops.
+
+# Prerequisites (on CentOS)
+
+sudo dnf install gtest-devel
