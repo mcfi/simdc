@@ -80,8 +80,8 @@ template <> struct FloatToIntTraits<float, int32_t> {
 
   static IntType avx512(FloatType x) {
     __m512 v = _mm512_set1_ps(x);
-    __m512i vi = _mm512_cvt_roundps_epi32(v, _MM_FROUND_TO_NEAREST_INT |
-                                                 _MM_FROUND_NO_EXC);
+    __m512i vi =
+        _mm512_cvt_roundps_epi32(v, _MM_FROUND_TO_ZERO | _MM_FROUND_NO_EXC);
     return _mm_cvtsi128_si32(_mm512_castsi512_si128(vi));
   }
 
@@ -156,8 +156,8 @@ template <> struct FloatToIntTraits<float, uint32_t> {
 #ifdef __AVX512F__
   static IntType avx512(FloatType x) {
     __m512 v = _mm512_set1_ps(x);
-    __m512i vi = _mm512_cvt_roundps_epu32(v, _MM_FROUND_TO_NEAREST_INT |
-                                                 _MM_FROUND_NO_EXC);
+    __m512i vi =
+        _mm512_cvt_roundps_epu32(v, _MM_FROUND_TO_ZERO | _MM_FROUND_NO_EXC);
     return _mm_cvtsi128_si32(_mm512_castsi512_si128(vi));
   }
 #endif
