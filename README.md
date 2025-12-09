@@ -1,6 +1,12 @@
 # simdc
 Showing simd instruction behaviors in C/C++ scalar loops.
 
-# Prerequisites (on CentOS)
+# Prerequisites
 
-sudo dnf install gtest-devel
+## CentOS
+
+sudo dnf install gtest gtest-devel
+
+## Ubuntu
+
+sudo apt-get install libgtest-dev
