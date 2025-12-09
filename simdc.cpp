@@ -133,7 +133,7 @@ template <> struct FloatToIntTraits<float, uint32_t> {
 #elif defined(__x86_64__)
 
   static IntType ref(FloatType x) {
-    if (std::isinf(x) || std::isnan(x)) {
+    if (!std::isfinite(x)) {
       return std::numeric_limits<IntType>::max();
     }
 
