@@ -204,6 +204,53 @@ TEST(neon, vcvtq_u32_f32) {
       FloatToIntTraits<float, uint32_t>::neon);
 }
 
+// This test always fails because fp16 fma only does rounding once while fp32
+// fma + fp16 conversion does rounding twice so the results could be different.
+TEST(neon, fp16_fp32_fma) {
+  std::atomic<uint16_t> first_a{0}, first_b{0}, first_c{0}, first_f16rs{0},
+      first_f16_32rs{0};
+  std::atomic<bool> have_first_mismatch{false};
+#pragma omp parallel for schedule(static)
+  for (uint64_t i = 0; i < (1LL << 34); ++i) {
+    uint16_t a = (i & 0xffff);
+    uint16_t b = ((i >> 16) & 0xffff);
+    uint8_t c = ((i >> 32) & 0xff);
+    float16x4_t f16a = vreinterpret_f16_u16(vdup_n_u16(a));
+    float16x4_t f16b = vreinterpret_f16_u16(vdup_n_u16(b));
+    float16x4_t f16c = vcvt_f16_u16(vdup_n_u16(c));
+    float16x4_t f16r = vfma_f16(f16b, f16a, f16c);
+    float16_t f16rs = vget_lane_f16(f16r, 0);
+
+    float32x4_t f32a = vcvt_f32_f16(f16a);
+    float32x4_t f32b = vcvt_f32_f16(f16b);
+    float32x4_t f32c = vcvt_f32_f16(f16c);
+    float32x4_t f32r = vfmaq_f32(f32b, f32a, f32c);
+    float16x4_t f16_32r = vcvt_f16_f32(f32r);
+    float16_t f16_32rs = vget_lane_f16(f16_32r, 0);
+
+    if (std::bit_cast<uint16_t>(f16rs) != std::bit_cast<uint16_t>(f16_32rs)) {
+      bool expected_false = false;
+      if (!have_first_mismatch.load(std::memory_order_relaxed)) {
+        if (have_first_mismatch.compare_exchange_strong(
+                expected_false, true, std::memory_order_relaxed)) {
+          first_a.store(a, std::memory_order_relaxed);
+          first_b.store(b, std::memory_order_relaxed);
+          first_c.store(c, std::memory_order_relaxed);
+          first_f16rs.store(std::bit_cast<uint16_t>(f16rs),
+                            std::memory_order_relaxed);
+          first_f16_32rs.store(std::bit_cast<uint16_t>(f16_32rs),
+                               std::memory_order_relaxed);
+        }
+      }
+    }
+  }
+  if (have_first_mismatch.load(std::memory_order_relaxed)) {
+    FAIL() << "Found mismatches for (" << std::hex << first_a.load() << ", "
+           << first_b.load() << ", " << first_c.load() << ")\n"
+           << first_f16rs.load() << ", " << first_f16_32rs.load() << "\n";
+  }
+}
+
 #ifdef __ARM_FEATURE_SVE
 TEST(sve, svcvt_s32_f32_x) {
   RunFullRangeTest<FloatToIntTraits<float, int32_t>>(
@@ -213,6 +260,7 @@ TEST(sve, svcvt_u32_f32_x) {
   RunFullRangeTest<FloatToIntTraits<float, uint32_t>>(
       FloatToIntTraits<float, uint32_t>::sve);
 }
+
 #endif
 
 #elif defined(__x86_64__)
